@@ -6,6 +6,7 @@ Modern file‑stitcher (text export)
 • Optional extension filter (`py,tf,yaml` …).
 • Binary files skipped automatically.
 • Outputs one UTF‑8 `.txt` in ./combined_files/.
+• Includes per-directory search filter.
 
 Emoji are avoided so the interface renders even on minimal fonts.
 """
@@ -35,18 +36,18 @@ class FileNavigator(ttk.Frame):
         self.pack(fill="both", expand=True)
 
         master.title("Select Files / Folders for TXT Export")
-        master.geometry("1120x680")
+        master.geometry("1120x700")
         master.tk.call("tk", "scaling", TK_SCALING)
 
         # state
         self.current_dir = pathlib.Path(start_dir or pathlib.Path.home())
         self.cart_files: list[pathlib.Path] = []
         self.ext_filter = tk.StringVar()
+        self.name_filter = tk.StringVar()
 
         self._build_ui()
         self._refresh()
 
-        # key bindings
         self.nav.bind("<Double-1>", self._enter_dir)
         self.nav.bind("<Return>", self._enter_dir)
         master.bind("<BackSpace>", lambda _: self._go_up())
@@ -55,21 +56,29 @@ class FileNavigator(ttk.Frame):
     def _build_ui(self):
         self.columnconfigure(0, weight=1)
         self.columnconfigure(2, weight=1)
-        self.rowconfigure(2, weight=1)
+        self.rowconfigure(3, weight=1)
 
         # path label
         self.path_var = tk.StringVar()
         ttk.Label(self, textvariable=self.path_var, anchor="w", relief="sunken")\
             .grid(row=0, column=0, columnspan=4, sticky="ew", padx=6, pady=(6, 2))
 
-        # toolbar
+        # toolbar (ext filter)
         bar = ttk.Frame(self)
-        bar.grid(row=1, column=0, columnspan=4, sticky="ew", padx=6, pady=(0, 6))
+        bar.grid(row=1, column=0, columnspan=4, sticky="ew", padx=6, pady=(0, 4))
         ttk.Button(bar, text="← Back", command=self._go_up).pack(side="left")
         ttk.Button(bar, text="Home", command=self._go_home).pack(side="left", padx=(4, 8))
         ttk.Label(bar, text="Ext filter:").pack(side="left")
-        ttk.Entry(bar, textvariable=self.ext_filter, width=24).pack(side="left")
-        ttk.Label(bar, text=" (comma‑sep, blank = all)").pack(side="left")
+        ttk.Entry(bar, textvariable=self.ext_filter, width=20).pack(side="left")
+        ttk.Label(bar, text="  (comma-sep, blank = all)").pack(side="left")
+
+        # search bar (file/folder name)
+        searchbar = ttk.Frame(self)
+        searchbar.grid(row=2, column=0, columnspan=4, sticky="ew", padx=6, pady=(0, 4))
+        ttk.Label(searchbar, text="Search in folder:").pack(side="left")
+        search_entry = ttk.Entry(searchbar, textvariable=self.name_filter, width=30)
+        search_entry.pack(side="left")
+        search_entry.bind("<KeyRelease>", lambda _: self._refresh())
 
         mono = ("Courier New", 10)
 
@@ -77,24 +86,24 @@ class FileNavigator(ttk.Frame):
         self.nav = tk.Listbox(self, selectmode="extended", activestyle="none", font=mono)
         nav_sb = ttk.Scrollbar(self, command=self.nav.yview)
         self.nav.config(yscrollcommand=nav_sb.set)
-        self.nav.grid(row=2, column=0, sticky="nsew", padx=(6, 0))
-        nav_sb.grid(row=2, column=1, sticky="ns")
+        self.nav.grid(row=3, column=0, sticky="nsew", padx=(6, 0))
+        nav_sb.grid(row=3, column=1, sticky="ns")
 
         # cart list
         self.cart = tk.Listbox(self, activestyle="none", font=mono)
         cart_sb = ttk.Scrollbar(self, command=self.cart.yview)
         self.cart.config(yscrollcommand=cart_sb.set)
-        self.cart.grid(row=2, column=2, sticky="nsew", padx=(6, 6))
-        cart_sb.grid(row=2, column=3, sticky="ns", padx=(0, 6))
+        self.cart.grid(row=3, column=2, sticky="nsew", padx=(6, 6))
+        cart_sb.grid(row=3, column=3, sticky="ns", padx=(0, 6))
 
         # mid buttons
-        mid = ttk.Frame(self); mid.grid(row=2, column=1, sticky="n")
+        mid = ttk.Frame(self); mid.grid(row=3, column=1, sticky="n")
         ttk.Button(mid, text="Add", width=6, command=self._add_selected).pack(pady=(50, 5))
         ttk.Button(mid, text="Remove", width=6, command=self._remove_selected).pack()
 
         # bottom buttons
         bottom = ttk.Frame(self)
-        bottom.grid(row=3, column=0, columnspan=4, sticky="ew", padx=6, pady=6)
+        bottom.grid(row=4, column=0, columnspan=4, sticky="ew", padx=6, pady=6)
         bottom.columnconfigure(0, weight=1)
         ttk.Button(bottom, text="Cancel", command=self._cancel).grid(row=0, column=0, sticky="w")
         ttk.Button(bottom, text="Generate TXT", command=self._accept).grid(row=0, column=1, sticky="e")
@@ -109,11 +118,16 @@ class FileNavigator(ttk.Frame):
             mb.showerror("Error", f"No permission for {self.current_dir}")
             self._go_up(); return
 
+        search = self.name_filter.get().strip().lower()
         for name in entries:
+            if search and search not in name.lower():
+                continue
             p = self.current_dir / name
             if p.is_dir():
                 self.nav.insert(tk.END, f"{FOLDER_PREFIX}{name}/")
         for name in entries:
+            if search and search not in name.lower():
+                continue
             if (self.current_dir / name).is_file():
                 self.nav.insert(tk.END, name)
 
@@ -125,18 +139,20 @@ class FileNavigator(ttk.Frame):
         if entry.startswith(FOLDER_PREFIX):
             folder = entry[len(FOLDER_PREFIX):].rstrip("/")
             self.current_dir = self.current_dir / folder
+            self.name_filter.set("")
             self._refresh()
 
     def _go_up(self):
         if self.current_dir.parent != self.current_dir:
             self.current_dir = self.current_dir.parent
+            self.name_filter.set("")
             self._refresh()
 
     def _go_home(self):
         self.current_dir = pathlib.Path.home()
+        self.name_filter.set("")
         self._refresh()
 
-    # ---------- FILTERS ----------
     def _allowed_ext(self, path: pathlib.Path) -> bool:
         raw = self.ext_filter.get().strip()
         if not raw:
@@ -157,7 +173,6 @@ class FileNavigator(ttk.Frame):
     def _should_include(self, path: pathlib.Path) -> bool:
         return self._allowed_ext(path) and not self._is_binary(path)
 
-    # ---------- CART OPS ----------
     def _add_selected(self):
         for idx in self.nav.curselection():
             entry = self.nav.get(idx)
@@ -185,7 +200,6 @@ class FileNavigator(ttk.Frame):
             self.cart_files.remove(path)
             self.cart.delete(idx)
 
-    # ---------- DONE / CANCEL ----------
     def _accept(self):
         if not self.cart_files:
             mb.showwarning("Nothing selected", "Cart is empty.")
@@ -197,14 +211,12 @@ class FileNavigator(ttk.Frame):
         self.master.selected_files = []
         self.master.destroy()
 
-# ────────────── HELPERS ─────────────
 
 def _iter_files_recursive(folder: pathlib.Path) -> Iterable[pathlib.Path]:
     for root, _dirs, files in os.walk(folder):
         for fname in files:
             yield pathlib.Path(root) / fname
 
-# ---------- EXPORT -----------
 
 def create_txt(paths: Iterable[pathlib.Path], out: pathlib.Path):
     with out.open("w", encoding="utf-8", newline="\n") as fh:
@@ -218,7 +230,7 @@ def create_txt(paths: Iterable[pathlib.Path], out: pathlib.Path):
             fh.write("\n")
     print("✓ Exported:", out)
 
-# ────────────── MAIN ─────────────
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = FileNavigator(root)
