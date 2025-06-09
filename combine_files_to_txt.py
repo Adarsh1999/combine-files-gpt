@@ -239,7 +239,7 @@ if __name__ == "__main__":
     if getattr(root, "selected_files", None):
         dest_dir = pathlib.Path.cwd() / "combined_files"
         dest_dir.mkdir(exist_ok=True)
-        dest_file = dest_dir / f"combined_{datetime.now():%Y%m%d_%H%M%S}.txt"
+        dest_file = dest_dir / f"combined_{datetime.now():%Y-%m-%d_%H-%M-%S}.txt"
         try:
             create_txt(root.selected_files, dest_file)
             mb.showinfo("Done", f"Saved:\n{dest_file}")
