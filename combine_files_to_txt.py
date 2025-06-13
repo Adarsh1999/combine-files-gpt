@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Modern file‑stitcher (text export)
+Modern file-stitcher (text export)
 ─────────────────────────────────
 • Pick individual files *or* entire folders (recursively).
 • Optional extension filter (`py,tf,yaml` …).
 • Binary files skipped automatically.
-• Outputs one UTF‑8 `.txt` in ./combined_files/.
+• Outputs one UTF-8 `.txt` in ./combined_files/.
 • Includes per-directory search filter.
 
 Emoji are avoided so the interface renders even on minimal fonts.
